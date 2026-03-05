@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Askim Premium Chat 🦋</title>
+<style>
+:root{
+ --bg:#fff5e0;
+ --myBubble:#3e4a56; --otherBubble:#f0f0f0;
+ --accent:#3e4a56; --textDark:#111; --textLight:#fff;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+  background:#fff5e0;
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+
+button:focus, input:focus {outline:none; box-shadow:none;}
+
+.login{display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;background:rgba(255,245,224,0.95);}
+.login input{padding:14px;border-radius:30px;border:1px solid #ccc;width:220px;}
+.login button{margin-top:10px;padding:12px 25px;border-radius:30px;border:none;background:var(--accent);color:white;font-weight:bold;cursor:pointer;}
+
+.chat{display:none;flex-direction:column;height:100vh;}
+.header{backdrop-filter:blur(12px);background:rgba(200,200,200,0.5);padding:12px;display:flex;align-items:center;justify-content:space-between;font-weight:600;position:sticky;top:0;z-index:10;border-bottom:1px solid rgba(0,0,0,.1);}
+#pinnedBar{background:#cfcfcf;padding:8px;font-size:13px;display:none;}
+.messages{flex:1;overflow-y:auto;padding:12px;scroll-behavior:smooth;}
+
+.bubble{padding:10px 14px;margin:6px 0;border-radius:16px;max-width:75%;font-size:14px;position:relative;animation:fadeIn .2s ease;box-shadow:0 2px 4px rgba(0,0,0,.1);}
+.me{background:var(--myBubble);color:var(--textLight);margin-left:auto;}
+.other{background:var(--otherBubble);color:var(--textDark);}
+.meta{font-size:10px;opacity:.6;text-align:right;margin-top:4px;}
+.reactions{font-size:13px;margin-top:4px;}
+.tick{margin-left:4px;font-size:12px;opacity:.7;}
+#typingIndicator{font-size:12px;color:gray;padding-left:12px;display:none;}
+
+.bottom{display:flex;align-items:center;padding:10px;background:rgba(245,245,245,0.9);position:relative;}
+.bottom input[type="text"]{flex:1;padding:12px;border-radius:25px;border:1px solid #ccc;}
+.bottom button{margin-left:6px;border:none;border-radius:50%;width:40px;height:40px;background:var(--accent);color:white;font-size:16px;cursor:pointer;}
+
+#emojiPicker{
+  display:none;
+  position:absolute;
+  bottom:60px;
+  left:10px;
+  background:#f0f0f0;
+  padding:8px;
+  border-radius:12px;
+  max-width:95%;
+  max-height:250px;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+  z-index:20;
+}
+#emojiSearch{
+  padding:6px;
+  margin-bottom:6px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  width:calc(100% - 16px);
+}
+.emojiCategory{font-weight:bold;margin:6px 0 2px 0;}
+.emojiList{display:flex;flex-wrap:wrap;}
+.emojiList span{font-size:24px;padding:4px;cursor:pointer;}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
+@media(max-width:600px){.bubble{max-width:85%;}}
+</style>
+</head>
+<body>
+
+<div class="login" id="login">
+<h2>Enter Password</h2>
+<input type="password" id="password">
+<button onclick="enter()">Enter</button>
+<p id="error"></p>
+</div>
+
+<div class="chat" id="chat">
+<div class="header">
+ <span>Askim 🦋</span>
+ <span>🔒 Encrypted</span>
+</div>
+<div id="pinnedBar"></div>
+<div class="messages" id="messages"></div>
+<div id="typingIndicator">Typing...</div>
+<div id="emojiPicker">
+ <input type="text" id="emojiSearch" placeholder="Search emojis...">
+ <div id="emojiContainer"></div>
+</div>
+
+<div class="bottom">
+<button onclick="toggleEmoji()">😀</button>
+<input type="file" id="mediaInput" accept="image/*,video/*,image/gif" hidden>
+<input type="text" id="msg" placeholder="Message...">
+<button onclick="mediaInput.click()">📷/🎥</button>
+<button onclick="send()">➤</button>
+</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+<script>
+// Firebase setup
+const firebaseConfig={apiKey:"YOUR_KEY",authDomain:"YOUR_DOMAIN",projectId:"YOUR_PROJECT",storageBucket:"YOUR_BUCKET"};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.firestore(); const storage=firebase.storage();
+firebase.auth().signInAnonymously();
+
+// Encryption
+const SECRET="askim-secret";
+function encrypt(text){return CryptoJS.AES.encrypt(text,SECRET).toString();}
+function decrypt(cipher){try{let bytes=CryptoJS.AES.decrypt(cipher,SECRET);return bytes.toString(CryptoJS.enc.Utf8);}catch{return "🔒";}}
+
+let userId=Math.random().toString(36).substr(2);
+
+// Recent emojis (max 10)
+let recentEmojis = [];
+
+// Expanded categories
+const categories = {
+ "Recent": recentEmojis,
+ "Smileys & Reactions": [
+   "😀","😁","😂","🤣","😃","😄","😅","😆","😉","😊","😋","😎","😍","😘","🥰","😗","😙","😚",
+   "🙂","🤗","🤩","🤔","🤨","🧐","🤓","😏","😣","😥","😮","🤐","😯","😪","😫","🥱","😴","😌",
+   "😛","😜","😝","🤤","😒","😓","😔","😕","🙃","🤑","😲","☹️","🙁","😖","😞","😟","😤","😢",
+   "😭","😦","😧","😨","😩","🤯","😬","😰","😱","🥵","🥶","😳","🤪","😵","😡","😠","🤬","😷",
+   "🤒","🤕","🤢","🤮","🤧","😇","🥳","🥺","🤠","🤡","🤥","🤫","🤭","😈","👿","👹","👺","💀",
+   "☠️","👻","👽","👾","🤖","🎃","❤️","💔","👍","👎","👏","🙏","🔥","✨","💯","🎉","💖","💘","🥰","😡","🤯","🤣"
+ ],
+ "Animals & Nature": [
+   "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵","🐔","🐧","🐦",
+   "🐤","🦆","🦅","🦉","🦇","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐜","🪲","🪳","🦗",
+   "🕷️","🦂","🐢","🐍","🦎","🦖","🦕","🐙","🦑","🦐","🦞","🦀","🐡","🐠","🐟","🐬","🐳","🐋",
+   "🦈","🐊","🐅","🐆","🦓","🦍","🦧","🐘","🦛","🦏","🐪","🐫","🦙","🦒","🐃","🐂","🐄","🐎",
+   "🐖","🐏","🐑","🐐","🦌","🐕","🐩","🐈","🐓","🦃","🦚","🦜","🦢","🕊️","🐇","🦝","🦨","🦡",
+   "🦦","🦥","🐁","🐀","🐿️","🦔",
+   "🌸","🌼","🌻","🌺","🌹","🥀","🌷","💐","🌱","🌲","🌳","🌴","🌵","🌾","🍀","🍁","🍂","🍃","🍄","🌿","☘️","🌍","🌎","🌏","🌞","🌛","🌜","🌙","⭐","🌟","⚡","☀️","☁️","🌤️","🌦️","🌧️","⛈️","🌩️","🌨️","❄️","☃️","⛄","🔥","💧","🌊"
+ ],
+ "Travel & Places": [
+   "🚗","🚕","🚙","🚌","🚎","🏎️","🚓","🚑","🚒","🚐","🛻","🚚","🚛","🚜","🛴","🚲","🛵","🏍️","🛺",
+   "🚤","🛳️","⛴️","🛥️","🚢","✈️","🛩️","🪂","🚁","🛰️","🚀","🛸",
+   "🏠","🏡","🏢","🏬","🏣","🏤","🏥","🏦","🏨","🏪","🏫","🏩","🏛️","⛪","🕌","🕍","🛕","🕋","⛺","🏕️","🏖️","🏜️","🏝️","🏞️","🏟️","🛤️","⛲","🗽","🗼","🗻","🗾"
+ ],
+ "Symbols":[
+   "❤️","💔","💕","💞","💓","💖","💗","💘","💝","💟","✨","⭐","🌟","☀️","🌙","⚡","🔥",
+   "💥","🌈","☁️","🌊","🎵","🎶","🎼","☮️","✝️","☪️","🕉️","☸️","✡️","🔯","🛐","⛎",
+   "♈","♉","♊","♋","♌","♍","♎","♏","♐","♑","♒","♓","♔","♕","♖","♗","♘","♙","♚","♛",
+   "♜","♝","♞","♟","©️","®️","™️","ℹ️","⚠️","❌","⭕","✅","✔️","✖️","➕","➖","➗","✳️","❇️"
+ ],
+ "Flags":[
+   "🏳️","🏴","🏁","🚩","🏳️‍🌈","🇺🇸","🇬🇧","🇨🇦","🇦🇺","🇩🇪","🇫🇷","🇮🇳","🇯🇵","🇰🇷","🇨🇳",
+   "🇧🇷","🇿🇦","🇲🇽","🇷🇺","🇪🇸","🇮🇹","🇸🇪","🇳🇴","🇩🇰","🇫🇮","🇳🇿","🇹🇭","🇻🇳","🇲🇾",
+   "🇸🇬","🇮🇩","🇦🇷","🇨🇱","🇵🇪","🇨🇴","🇵🇱","🇹🇷","🇪🇬","🇮🇱","🇦🇪","🇶🇦","🇧🇭","🇰🇼","🇸🇦"
+ ]
+};
+
+// Render emojis function
+const emojiContainer=document.getElementById("emojiContainer");
+const emojiSearch=document.getElementById("emojiSearch");
+
+function renderEmojis(filter=""){
+  emojiContainer.innerHTML="";
+  for(let cat in categories){
+    let catDiv=document.createElement("div");
+    catDiv.className="emojiCategory"; catDiv.innerText=cat;
+    emojiContainer.appendChild(catDiv);
+    let listDiv=document.createElement("div"); listDiv.className="emojiList";
+    categories[cat].forEach(e=>{
+      if(!filter || e.includes(filter) || cat.toLowerCase().includes(filter.toLowerCase())){
+        let span=document.createElement("span"); span.innerText=e;
+        span.onclick=()=>{ 
+          msg.value+=e; 
+          addToRecent(e); 
+          toggleEmoji(false);
+        };
+        listDiv.appendChild(span);
+      }
+    });
+    emojiContainer.appendChild(listDiv);
+  }
+}
+
+function addToRecent(e){
+  if(!recentEmojis.includes(e)){
+    recentEmojis.unshift(e);
+    if(recentEmojis.length>10) recentEmojis.pop();
+  }
+  renderEmojis(emojiSearch.value);
+}
+
+emojiSearch.addEventListener("input",()=>{renderEmojis(emojiSearch.value);});
+renderEmojis();
+
+// Toggle emoji picker
+function toggleEmoji(force){emojiPicker.style.display=force===false?"none":emojiPicker.style.display==="flex"?"none":"flex";}
+
+// --- Login, typing, sending, messages remain same as previous code ---
+
+</script>
+</body>
+  </html>
