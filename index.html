@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Private Chat</title>
+
+<style>
+
+body{
+margin:0;
+font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+background:#fff5e0;
+height:100vh;
+display:flex;
+flex-direction:column;
+}
+
+header{
+backdrop-filter:blur(20px);
+background:rgba(255,255,255,0.6);
+padding:15px;
+font-weight:bold;
+text-align:center;
+border-bottom:1px solid rgba(0,0,0,0.1);
+}
+
+#chat{
+flex:1;
+overflow:auto;
+padding:10px;
+display:flex;
+flex-direction:column;
+gap:10px;
+}
+
+.message{
+max-width:75%;
+padding:10px;
+border-radius:15px;
+animation:pop .2s ease;
+}
+
+.me{
+background:#dcf8c6;
+align-self:flex-end;
+}
+
+.other{
+background:white;
+align-self:flex-start;
+}
+
+@keyframes pop{
+from{transform:scale(.9);opacity:0}
+to{transform:scale(1);opacity:1}
+}
+
+#inputBar{
+display:flex;
+gap:5px;
+padding:10px;
+background:white;
+}
+
+#input{
+flex:1;
+padding:10px;
+border-radius:20px;
+border:1px solid #ccc;
+}
+
+button{
+border:none;
+background:#4caf50;
+color:white;
+padding:10px 15px;
+border-radius:20px;
+}
+
+#emojiPicker{
+position:absolute;
+bottom:70px;
+left:10px;
+right:10px;
+height:200px;
+background:white;
+border-radius:10px;
+overflow:auto;
+display:none;
+padding:10px;
+box-shadow:0 5px 20px rgba(0,0,0,0.2);
+}
+
+.category{
+font-weight:bold;
+margin-top:10px;
+}
+
+.emoji{
+font-size:20px;
+cursor:pointer;
+padding:5px;
+}
+
+#login{
+position:fixed;
+top:0;
+left:0;
+right:0;
+bottom:0;
+display:flex;
+align-items:center;
+justify-content:center;
+background:white;
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="login">
+<div>
+<h2>Private Chat</h2>
+<input id="pass" placeholder="Password">
+<button onclick="enter()">Enter</button>
+</div>
+</div>
+
+<header>Private Chat</header>
+
+<div id="chat"></div>
+
+<div id="emojiPicker"></div>
+
+<div id="inputBar">
+<button onclick="toggleEmoji()">😀</button>
+<input id="input" placeholder="Message">
+<input type="file" id="file" hidden>
+<button onclick="document.getElementById('file').click()">📎</button>
+<button onclick="send()">Send</button>
+</div>
+
+<script>
+
+const PASSWORD="askim"
+
+function enter(){
+if(document.getElementById("pass").value===PASSWORD){
+document.getElementById("login").style.display="none"
+}else{
+alert("Wrong password")
+}
+}
+
+const chat=document.getElementById("chat")
+const input=document.getElementById("input")
+
+function send(){
+
+if(input.value.trim()=="") return
+
+addMessage(input.value,"me")
+
+input.value=""
+
+}
+
+function addMessage(text,type){
+
+let div=document.createElement("div")
+
+div.className="message "+type
+
+div.innerHTML=text+"<br><small>✔✔</small>"
+
+chat.appendChild(div)
+
+chat.scrollTop=chat.scrollHeight
+
+}
+
+document.getElementById("file").onchange=e=>{
+
+let file=e.target.files[0]
+
+let url=URL.createObjectURL(file)
+
+if(file.type.startsWith("image")){
+addMessage("<img src='"+url+"' width='200'>","me")
+}
+
+else if(file.type.startsWith("video")){
+addMessage("<video src='"+url+"' controls width='200'></video>","me")
+}
+
+}
+
+function toggleEmoji(){
+
+let p=document.getElementById("emojiPicker")
+
+p.style.display=p.style.display=="block"?"none":"block"
+
+}
+
+let recent=[]
+
+const categories={
+
+"Recent":[],
+
+"Smileys & Reactions":[
+"😀","😁","😂","🤣","😃","😄","😅","😆","😉","😊",
+"😍","😘","🥰","😎","🤩","🥳","😇","😜","🤪","😡",
+"👍","👎","👏","🙌","🙏","🔥","💯","❤️","💔","✨"
+],
+
+"Animals & Nature":[
+"🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯",
+"🦁","🐮","🐷","🐸","🐵","🐧","🐦","🐤","🦆","🦅",
+"🌳","🌲","🌴","🌵","🌸","🌼","🌻","🌺","🌹","🌈"
+],
+
+"Food":[
+"🍎","🍌","🍉","🍇","🍓","🍔","🍟","🍕","🌮","🌯",
+"🍜","🍣","🍤","🍰","🎂","🍫","🍭","🍪","🍩"
+],
+
+"Travel & Places":[
+"🚗","🚕","🚌","🚓","🚑","✈️","🚀","🚁","🏝️","🏖️",
+"🏜️","🏔️","🌋","🏠","🏢","🏰","🗼","🗽"
+],
+
+"Symbols":[
+"✔️","❌","⚠️","❗","❓","🔒","🔓","🔔","🔕","⭐"
+],
+
+"Flags":[
+"🇺🇸","🇬🇧","🇨🇦","🇦🇺","🇩🇪","🇫🇷","🇮🇳","🇯🇵",
+"🇰🇷","🇧🇷","🇿🇦","🇲🇽","🇪🇸","🇮🇹","🇹🇿"
+]
+
+}
+
+function drawEmoji(){
+
+let picker=document.getElementById("emojiPicker")
+
+picker.innerHTML=""
+
+categories["Recent"]=recent
+
+for(let cat in categories){
+
+let title=document.createElement("div")
+title.className="category"
+title.innerText=cat
+picker.appendChild(title)
+
+categories[cat].forEach(e=>{
+
+let span=document.createElement("span")
+span.className="emoji"
+span.innerText=e
+
+span.onclick=()=>{
+
+input.value+=e
+
+recent.unshift(e)
+
+recent=[...new Set(recent)].slice(0,10)
+
+drawEmoji()
+
+}
+
+picker.appendChild(span)
+
+})
+
+}
+
+}
+
+drawEmoji()
+
+</script>
+
+</body>
+  </html>
